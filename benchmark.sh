@@ -5,7 +5,7 @@
 # run as: sudo ./benchmark.sh
 
 DATAMB=${1:-512}
-FILENM=~/test.dat
+FILENM=${2:-~/test.dat}
 [ -f /flash/config.txt ] && CONFIG=/flash/config.txt || CONFIG=/boot/config.txt
 
 trap "rm -f ${FILENM}" EXIT
@@ -54,12 +54,15 @@ turbo="$(vcgencmd get_config int | grep force_turbo | awk -F= '{print $2}')"
 [ ${turbo} -eq 0 ]   && turbo="$(cat /sys/devices/system/cpu/cpufreq/ondemand/io_is_busy)"
 [ -n "${core_max}" ] || core_max="${core_now}"
 
+echo "Settings:"
+echo "========"
 echo "CONFIG: ${overlay}"
 echo "CLOCK : ${clock}"
 echo "CORE  : ${core_max} MHz, turbo=${turbo}"
-echo "DATA  : ${DATAMB} MB, ${FILENM}"
-echo
+echo "DATA  : ${DATAMB} MB"
+echo "FILE  : $FILENM"
 
+echo
 echo "HDPARM:"
 echo "======"
 HD1="$(getperfmbs "${HDCMD}" 5 8 MB)"
