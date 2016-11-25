@@ -4,17 +4,25 @@
 # sudo chmod +x benchmark.sh
 # run as: sudo ./benchmark.sh
 
+# sudo ./benchmark.sh 512 /mnt/usb_1 /test/test.dat
+# arg 1: number of MB 
+# arg 2: device
+# arg 3: path and filename
+
 DATAMB=${1:-512}
-FILENM=${2:-~/test.dat}
+DEVICE=${2:-/dev/mmcblk0}
+FILENM=${3:-~/test.dat}
 [ -f /flash/config.txt ] && CONFIG=/flash/config.txt || CONFIG=/boot/config.txt
 
 trap "rm -f ${FILENM}" EXIT
 
 [ "$(whoami)" == "root" ] || { echo "Must be run as root!"; exit 1; }
 
-HDCMD="hdparm -t --direct /dev/mmcblk0 | grep Timing"
+HDCMD="hdparm -t --direct $DEVICE | grep Timing"
 WRCMD="rm -f ${FILENM} && sync && dd if=/dev/zero of=${FILENM} bs=1M count=${DATAMB} conv=fsync 2>&1 | grep -v records"
 RDCMD="echo 3 > /proc/sys/vm/drop_caches && sync && dd if=${FILENM} of=/dev/null bs=1M 2>&1 | grep -v records"
+
+# not using OpenELEC, but this is required for proper calculation of READ and WRITE times
 grep OpenELEC /etc/os-release >/dev/null && DDTIME=5 || DDTIME=6
 
 getperfmbs()
@@ -28,7 +36,9 @@ getperfmbs()
   if [ "${bormb}" == "MB" ]; then
     perf="$(echo "${count}" "${_time}" | awk '{printf("%0.2f", $1/$2)}')"
   else
-    perf="$(echo "${count}" "${_time}" | awk '{printf("%0.2f", $1/$2/1024/1024)}')"
+    # dd calculates MB using 1,000x1,0000. This was using 1024x1024
+    # So, the READ / WRITE numbers were not an average
+    perf="$(echo "${count}" "${_time}" | awk '{printf("%0.2f", $1/$2/1000/1000)}')"
   fi
   echo "${perf}"
   echo "${result}" >&2
@@ -36,10 +46,11 @@ getperfmbs()
 
 getavgmbs()
 {
-  echo "${1} ${2} ${3}" | awk '{r=($1 + $2 + $3)/3.0; printf("%0.2f MB/s",r)}'
+  echo "${1} ${2} ${3}" | awk '{r=($1 + $2 + $3)/3.0; printf("%0.2f MB/sec",r)}'
 }
 
-systemctl stop kodi 2>/dev/null
+# not running kodi
+# systemctl stop kodi 2>/dev/null
 clear
 sync
 
@@ -61,6 +72,7 @@ echo "CLOCK : ${clock}"
 echo "CORE  : ${core_max} MHz, turbo=${turbo}"
 echo "DATA  : ${DATAMB} MB"
 echo "FILE  : $FILENM"
+echo "DEVICE: $DEVICE"
 
 echo
 echo "HDPARM:"
@@ -86,8 +98,7 @@ RD2="$(getperfmbs "${RDCMD}" 1 ${DDTIME} B)"
 RD3="$(getperfmbs "${RDCMD}" 1 ${DDTIME} B)"
 RDA="$(getavgmbs "${RD1}" "${RD2}" "${RD3}")"
 
-echo
-echo "RESULT (AVG):"
-echo "============"
-printf "%-33s   core_freq   turbo   overclock_50    WRITE        READ        HDPARM\n" "Overlay config"
-printf "%-33s      %d        %d     %11s   %10s   %10s   %10s\n" "${overlay}" "${core_max}" "${turbo}" "${clock}" "${WRA}" "${RDA}" "${HDA}"
+echo 
+echo "AVERAGE:"
+echo "======="
+printf "HDPARM = %10s   WRITE = %10s    READ = %10s\n" "${HDA}" "${WRA}" "${RDA}"
